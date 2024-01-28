@@ -80,7 +80,8 @@ app.post('/api/users', async (req, res) => {
 
 app.post('/api/users/find',async(req,res)=>{
   try{
-    const user = await User.findOne(req.body.email);
+    const {email} = req.body;
+    const user = await User.findOne({email});
     if(!user){
       return res.status(404).json({message:'User not Found.'});
     }
