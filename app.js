@@ -6,13 +6,13 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/loginDB';
+const MONGO_URI = process.env.MONGO_URI //|| 'mongodb://127.0.0.1:27017/loginDB';
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB');
   })
@@ -39,6 +39,9 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 app.get('/api/users', async (req, res) => {
+  if(req.query.passkey!=='AnishKhari'){
+    return res.status(401).json({error:'Unauthorised'});
+  }
   try {
     const users = await User.find({});
     res.status(200).json(users);
@@ -50,21 +53,36 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    console.log(req.body);
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+
     const newUser = new User({ username, email, password });
     await newUser.save();
-    res.status(201).json({ userSaved: newUser.email });
+
+    res.status(201).json({
+      message: 'User saved',
+      username: newUser.username,
+      email: newUser.email
+    });
   } catch (err) {
-    res.status(400).json({ error: 'Bad Request' });
+    if (err.name === 'ValidationError') {
+      res.status(400).json({ error: 'Validation Error', details: err.message });
+    } else {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 });
 
+
+
 app.post('/api/users/find',async(req,res)=>{
   try{
-    const { email }= req.body;
-    const user = await User.findOne({email});
+    const user = await User.findOne(req.body.email);
     if(!user){
-      return res.status(404).json({error:'User not Found.'});
+      return res.status(404).json({message:'User not Found.'});
     }
     return res.status(200).json({message:'User found'})
   }
@@ -89,6 +107,22 @@ app.post('/api/users/findAndVerify', async (req, res) => {
     res.status(200).json({ message: 'User found',user});
   } catch (err) {
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/users/forgot-password',async(req,res)=>{
+  try{
+    const {email, password} = req.body;
+    const user = await User.findOne({email});
+    if(!user){
+      res.status(404).json({error:'User not found'});
+    }
+    user.password = password;
+    await user.save();
+    return res.status(200).json({message:'User Password Updated Successfully'});
+  }
+  catch(error){
+    res.status(500).json({error:'Internal Server Error'});
   }
 });
 
