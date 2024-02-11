@@ -53,6 +53,19 @@ app.get("/api/users/find-all", async (req, res) => {
   }
 });
 
+app.delete('/api/user/delete/:id',async(req,res)=>{
+  if(req.query.passkey!=='AnishKhari'){
+    return res.status(401).json({error: "Unauthorised"});
+  }
+  try{
+    await User.findByIdAndDelete(req.params.id);
+    res.status(200).json({message:'User Deleted Successfully'});
+  }
+  catch(err){
+    res.status(500).json({error:'Internal Server Error'});
+  }
+})
+
 const authenticationToken = (req, res, next) => {
   const token =
     req.headers.authorization && req.headers.authorization.split(" ")[1];
@@ -62,6 +75,7 @@ const authenticationToken = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
+      console.log(err);
       return res.status(403).json({ error: "Invalid token" });
     }
     req.userId = decoded.userId;
@@ -69,7 +83,7 @@ const authenticationToken = (req, res, next) => {
   });
 };
 
-app.get("/api/users", authenticationToken, async (req, res) => {
+app.get("/api/user", authenticationToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) {
@@ -85,7 +99,7 @@ app.get("/api/users", authenticationToken, async (req, res) => {
   }
 });
 
-app.post("/api/users", async (req, res) => {
+app.post("/api/user/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
@@ -99,7 +113,7 @@ app.post("/api/users", async (req, res) => {
     await newUser.save();
 
     const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRE_IN,
+      expiresIn: `${process.env.JWT_EXPIRE_IN}`,
     });
 
     res.status(201).json({
@@ -117,7 +131,7 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-app.post("/api/users/find", async (req, res) => {
+app.post("/api/users/findUser", async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
@@ -130,7 +144,7 @@ app.post("/api/users/find", async (req, res) => {
   }
 });
 
-app.post("/api/users/findAndVerify", async (req, res) => {
+app.post("/api/user/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -144,26 +158,24 @@ app.post("/api/users/findAndVerify", async (req, res) => {
       return res.status(401).json({ error: "Wrong Password" });
     }
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRE_IN,
+      expiresIn: `${process.env.JWT_EXPIRE_IN}`,
     });
-    res.status(200).json({ message: "User found", user, token });
+    res.status(200).json({ message: "User found", token });
   } catch (err) {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-app.post("/api/users/forgot-password", async (req, res) => {
+app.patch("/api/user/forgot-password", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password} = req.body;
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(404).json({ error: "User not found" });
+      return res.status(404).json({ error: "User not found" });
     }
-    user.password = password;
+    user.password = await bcrypt.hash(password,10);
     await user.save();
-    return res
-      .status(200)
-      .json({ message: "User Password Updated Successfully" });
+    return res.status(200).json({ message: "User Password Updated Successfully" });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
